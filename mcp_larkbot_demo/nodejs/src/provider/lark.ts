@@ -58,7 +58,28 @@ export function generateLarkCardMessage(content: string) {
  * 实现ChatProvider接口，提供飞书/Lark平台特有的功能
  * Implements ChatProvider interface with Lark platform-specific features
  */
+/** 按自然段落拆分长文本 / Split long text at natural paragraph boundaries */
+function splitIntoChunks(text: string, maxLen: number): string[] {
+  if (text.length <= maxLen) return [text];
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > maxLen) {
+    let splitAt = remaining.lastIndexOf('\n\n', maxLen);
+    if (splitAt < maxLen * 0.5) splitAt = remaining.lastIndexOf('\n', maxLen);
+    if (splitAt < maxLen * 0.5) splitAt = maxLen;
+    chunks.push(remaining.slice(0, splitAt));
+    remaining = remaining.slice(splitAt).trimStart();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
+
+const MAX_MSG_LENGTH = 4000;
+
 export class LarkChatProvider implements ChatProvider {
+  /** messageId -> chatId 映射，用于分段发送 / Map messageId to chatId for multi-part sending */
+  private messageChatMap = new Map<string, string>();
+
   /**
    * 获取飞书/LarkOAuth授权URL
    * Get Lark OAuth authorization URL
@@ -82,6 +103,7 @@ export class LarkChatProvider implements ChatProvider {
     }
 
     const { message_id } = await larkService.sendCardMessage(chatId, generateLarkCardMessage(message));
+    this.messageChatMap.set(message_id, chatId);
     return { messageId: message_id };
   }
 
@@ -95,7 +117,21 @@ export class LarkChatProvider implements ChatProvider {
     if (typeof message !== 'string') {
       message = parseMessages2Markdown(message);
     }
-    return await larkService.updateCardMessage(messageId, generateLarkCardMessage(message));
+    if (message.length <= MAX_MSG_LENGTH) {
+      return await larkService.updateCardMessage(messageId, generateLarkCardMessage(message));
+    }
+    // 内容超长，拆分为多条消息 / Content too long, split into multiple messages
+    const chunks = splitIntoChunks(message, MAX_MSG_LENGTH);
+    const chatId = this.messageChatMap.get(messageId);
+    await larkService.updateCardMessage(
+      messageId,
+      generateLarkCardMessage(chunks[0] + (chunks.length > 1 ? `\n\n> *(内容较长，共 ${chunks.length} 条消息)*` : ''))
+    );
+    if (chatId) {
+      for (let i = 1; i < chunks.length; i++) {
+        await larkService.sendCardMessage(chatId, generateLarkCardMessage(`*(第 ${i + 1}/${chunks.length} 条)*\n\n` + chunks[i]));
+      }
+    }
   }
 
   /**

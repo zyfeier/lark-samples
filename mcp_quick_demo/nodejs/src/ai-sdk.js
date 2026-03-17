@@ -52,9 +52,9 @@ async function createLarkMCPClient() {
     "mcp",
     "--token-mode",
     "tenant_access_token",
-    // 你可以自定义开启的 Tools 或者 Presets / You can custom enable tools or presets here
-    // '-t',
-    // 'bitable.v1.app.create,bitable.v1.appTable.create',
+    // 启用多维表格预设工具集
+    "-t",
+    "preset.base.default",
   ];
 
   // Use Windows platform to run npx command with cmd.exe | 使用 Windows 平台运行 npx 命令

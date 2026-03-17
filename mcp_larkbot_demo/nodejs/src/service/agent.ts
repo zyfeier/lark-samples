@@ -140,6 +140,8 @@ export class AgentService {
         }) as typeof tool.execute;
       }
 
+      console.log(`[Agent] MCP 客户端数: ${userContext.mcpClients.length}, 工具总数: ${Object.keys(tools).length}`);
+      console.log(`[Agent] 可用工具: ${Object.keys(tools).join(', ')}`);
       console.log('处理用户请求 / Start handle User Query', query);
       // 开始流式文本生成
       // Start streaming text generation
@@ -167,7 +169,9 @@ export class AgentService {
          */
         onChunk: chunk => {
           tempMessages = parseChunk2Message(tempMessages, chunk);
-          this.throttledUpdateMessage(messageId, tempMessages);
+          this.throttledUpdateMessage(messageId, tempMessages)?.catch?.((e: unknown) => {
+            console.error('[throttledUpdate error]', (e as any)?.response?.data || (e as any)?.message);
+          });
         },
 
         /**
@@ -179,7 +183,9 @@ export class AgentService {
         onStepFinish: step => {
           const messages = step.response.messages;
           this.contextService.addMessage(messages);
-          this.provider.updateMessage(messageId, messages);
+          this.provider.updateMessage(messageId, messages).catch((e: unknown) => {
+            console.error('[updateMessage error]', (e as any)?.response?.data || (e as any)?.message);
+          });
         },
 
         /**

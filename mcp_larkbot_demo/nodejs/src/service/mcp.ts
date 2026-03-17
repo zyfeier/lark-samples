@@ -1,75 +1,108 @@
 /**
  * MCP客户端服务
- * MCP Client Service
- *
- * 功能说明:
- * - 创建和管理MCP(Model Context Protocol)客户端
- * - 连接飞书/LarkMCP服务器
- * - 提供工具调用功能
- *
- * Features:
- * - Create and manage MCP (Model Context Protocol) clients
- * - Connect to Lark MCP server
- * - Provide tool calling functionality
+ * 支持多种 MCP 服务器：飞书Bitable(stdio)、飞书文档(SSE)、JIRA(HTTP)、Markitdown(stdio)
  */
 
 import { experimental_createMCPClient as createMCPClient } from 'ai';
-// @ts-ignore - 忽略类型检查，因为这是实验性功能
-// @ts-ignore - Ignore type checking as this is experimental feature
+// @ts-ignore
 import { Experimental_StdioMCPTransport as StdioMCPTransport } from 'ai/mcp-stdio';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { config } from '../config';
 
-/**
- * MCP客户端服务类
- * MCP Client Service Class
- * 提供创建和管理MCP客户端的静态方法
- * Provides static methods for creating and managing MCP clients
- */
+/** MCP 客户端类型 */
+export type MCPClient = Awaited<ReturnType<typeof createMCPClient>>;
+
 export class MCPClientService {
+
   /**
-   * 创建飞书/LarkMCP客户端
-   * Create Lark MCP client
-   *
-   * 该方法通过启动外部进程来创建MCP客户端连接
-   * This method creates MCP client connection by starting external process
-   *
-   * @param accessToken 用户访问令牌（可选）/ User access token (optional)
-   * @returns Promise<MCPClient> MCP客户端实例 / MCP client instance
+   * 飞书 Bitable MCP (stdio) — 多维表格操作
    */
-  static async createLarkMCPClient(accessToken?: string) {
-    // 构建命令参数
-    // Build command arguments
+  static async createLarkBitableMCPClient(accessToken?: string): Promise<MCPClient> {
     let command = 'npx';
     let args = [
-      '-y',
-      '@larksuiteoapi/lark-mcp',
-      'mcp',
-      '-a',
-      config.lark.appId,
-      '-s',
-      config.lark.appSecret,
-      '-d',
-      config.lark.domain,
-      // 你可以自定义开启的 Tools 或者 Presets / You can custom enable tools or presets here
-      // '-t',
-      // 'bitable.v1.app.create,bitable.v1.appTable.create',
+      '-y', '@larksuiteoapi/lark-mcp', 'mcp',
+      '-a', config.lark.appId,
+      '-s', config.lark.appSecret,
+      '-d', config.lark.domain,
+      '-t', 'preset.base.default',
     ];
 
-    // Use Windows platform to run npx command with cmd.exe | 使用 Windows 平台运行 npx 命令
     if (process.platform === 'win32') {
       args = ['/c', command, ...args];
       command = 'cmd.exe';
     }
 
-    // 如果提供了用户访问令牌，添加到参数中
-    // If user access token is provided, add it to arguments
     if (accessToken) {
-      args.push('-u', accessToken);
-      args.push('--token-mode', 'user_access_token');
+      args.push('-u', accessToken, '--token-mode', 'user_access_token');
     }
 
-    // 创建并返回MCP客户端，使用标准输入输出传输
-    // Create and return MCP client using stdio transport
-    return createMCPClient({ transport: new StdioMCPTransport({ command, args }) });
+    return createMCPClient({
+      transport: new StdioMCPTransport({ command, args }),
+    });
+  }
+
+  /**
+   * 飞书文档 MCP (HTTP Streamable) — 文档读写、搜索、评论、知识库
+   */
+  static async createFeishuDocMCPClient(): Promise<MCPClient> {
+    const url = new URL(config.mcp.feishuMcp.url);
+    const transport = new StreamableHTTPClientTransport(url);
+    return createMCPClient({
+      transport: transport as any,
+    });
+  }
+
+  /**
+   * JIRA MCP (HTTP Streamable) — issue 查询/创建/更新
+   */
+  static async createJiraMCPClient(): Promise<MCPClient> {
+    const url = new URL(config.mcp.jira.url);
+    const transport = new StreamableHTTPClientTransport(url, {
+      requestInit: {
+        headers: config.mcp.jira.headers,
+      },
+    });
+    return createMCPClient({
+      transport: transport as any, // MCP SDK Transport 兼容 ai 的 MCPTransport
+    });
+  }
+
+  /**
+   * Markitdown MCP (stdio) — PDF/网页转 Markdown
+   */
+  static async createMarkitdownMCPClient(): Promise<MCPClient> {
+    return createMCPClient({
+      transport: new StdioMCPTransport({
+        command: 'uvx',
+        args: ['--with', 'markitdown[pdf]', 'markitdown-mcp'],
+      }),
+    });
+  }
+
+  /**
+   * 创建所有不需要用户认证的全局 MCP 客户端
+   * 单个失败不影响其他
+   */
+  static async createGlobalMCPClients(): Promise<MCPClient[]> {
+    const clients: MCPClient[] = [];
+
+    const tasks = [
+      { name: 'feishu-doc', fn: () => this.createFeishuDocMCPClient() },
+      { name: 'jira', fn: () => this.createJiraMCPClient() },
+      { name: 'markitdown', fn: () => this.createMarkitdownMCPClient() },
+    ];
+
+    const results = await Promise.allSettled(tasks.map(t => t.fn()));
+
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        clients.push(result.value);
+        console.log(`[MCP] ✅ ${tasks[i].name} 客户端创建成功`);
+      } else {
+        console.error(`[MCP] ❌ ${tasks[i].name} 客户端创建失败:`, result.reason?.message || result.reason);
+      }
+    });
+
+    return clients;
   }
 }

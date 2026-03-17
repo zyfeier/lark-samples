@@ -18,6 +18,7 @@
 import { AgentService } from '../service/agent';
 import { ContextService } from '../service/context';
 import { ChatProvider } from '../provider/type';
+import { saveUserToken, getSavedToken, refreshAccessToken, removeUserToken } from '../service/token-store';
 import { Express } from 'express';
 
 /**
@@ -70,6 +71,29 @@ export class ChatController {
          * Unauthorized users need to complete authorization flow first
          */
         if (!contextService.isLogin) {
+          // 尝试从磁盘恢复 token
+          // Try to restore token from disk
+          const savedToken = getSavedToken(userId);
+          if (savedToken) {
+            // 检查 token 是否过期
+            if (savedToken.expiresAt > Date.now()) {
+              // Token 未过期，直接恢复
+              console.log(`[AutoLogin] 用户 ${userId} 从磁盘恢复 token`);
+              await contextService.addAuthToken(savedToken);
+            } else {
+              // Token 已过期，尝试刷新
+              console.log(`[AutoLogin] 用户 ${userId} token 已过期，尝试刷新`);
+              const newToken = await refreshAccessToken(userId);
+              if (newToken) {
+                await contextService.addAuthToken(newToken);
+              } else {
+                removeUserToken(userId);
+              }
+            }
+          }
+        }
+
+        if (!contextService.isLogin) {
           // 发送登录链接给用户
           // Send login link to user
           await provider.sendMessage(
@@ -106,6 +130,8 @@ export class ChatController {
         // Get user context service and add auth token
         const contextService = ContextService.getUserContextService(authInfo.userId);
         contextService.addAuthToken(authInfo);
+        // 持久化 token 到磁盘
+        saveUserToken(authInfo.userId, authInfo);
       });
     }
   }

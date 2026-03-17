@@ -50,24 +50,27 @@ export const config = {
     // OAuth授权范围
     // OAuth authorization scopes
     scope: [
-      'im:chat:read',
-      'im:chat.members:read',
-      'im:message:readonly',
-      'wiki:wiki:readonly',
-      'docx:document:readonly',
-      'docx:document:create',
-      'search:docs:read',
-      'docs:document:import',
-      'docs:document.media:upload',
-      'docs:permission.member:create',
-      'base:app:create',
-      'base:table:create',
-      'base:table:read',
-      'base:field:read',
-      'base:record:retrieve',
-      'base:record:create',
-      'base:record:update',
-      'contact:user.id:readonly',
+      "offline_access",
+      "base:app:create",
+      "base:field:read",
+      "base:record:create",
+      "base:record:retrieve",
+      "base:record:update",
+      "base:table:create",
+      "contact:user.id:readonly",
+      "docs:document.media:upload",
+      "docs:document:import",
+      "docs:permission.member:create",
+      "docx:document:create",
+      "docx:document:readonly",
+      "im:chat.members:read",
+      "im:chat:read",
+      "search:docs:read",
+      "wiki:wiki:readonly",
+      "base:table:read",
+      "bitable:app",
+      "bitable:app:readonly",
+      "im:message:readonly"
     ],
   },
 
@@ -102,10 +105,24 @@ export const config = {
   },
 
   /**
+   * MCP 服务器配置
+   */
+  mcp: {
+    feishuMcp: {
+      url: process.env.FEISHU_MCP_URL || '',
+    },
+    jira: {
+      url: process.env.JIRA_MCP_URL || '',
+      headers: {
+        'X-Atlassian-Jira-Url': process.env.JIRA_URL || '',
+        'X-Atlassian-Username': process.env.JIRA_USERNAME || '',
+        'X-Atlassian-Jira-Personal-Token': process.env.JIRA_TOKEN || '',
+      },
+    },
+  },
+
+  /**
    * 服务器端口配置
-   * Server port configuration
-   * 默认端口为3000，可通过环境变量PORT覆盖
-   * Default port is 3000, can be overridden by PORT environment variable
    */
   port: parseInt(process.env.PORT || '3000'),
 };

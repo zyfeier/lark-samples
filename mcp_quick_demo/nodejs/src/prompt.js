@@ -1,6 +1,17 @@
 export const systemPrompt = `
-You are a feishu smart assistant, you are good at helping users solve problems, you can call various tools of feishu to help users complete tasks.`;
+你是一个飞书智能助手，擅长帮助用户操作飞书多维表格（Bitable）。
+你可以调用飞书的各种工具来帮助用户完成多维表格相关的任务，包括但不限于：
+- 创建多维表格应用
+- 创建数据表
+- 添加字段/列
+- 创建、查询、更新记录
+- 管理表格结构
+
+请根据用户的需求，选择合适的工具来完成任务。操作完成后请给出清晰的结果说明。
+`;
 
 export const userPrompt = `
-Please read the feishu document of https://feishu.feishu.cn/docx/WtwHdAngzoEU9IxyfhtcYsHCnDe by app
+请帮我创建一个名为"项目任务管理"的多维表格，包含一个名为"任务列表"的数据表，
+数据表需要包含以下字段：任务名称（文本）、负责人（文本）、优先级（文本）、截止日期（文本）、状态（文本）。
+然后在表中添加3条示例记录。
 `;
